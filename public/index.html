@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Gallery</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: white;
+}
+
+header {
+    padding: 20px;
+    text-align: center;
+    background: #1c1c1c;
+}
+
+h1 {
+    margin: 0 0 15px;
+}
+
+#search {
+    width: 90%;
+    max-width: 500px;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    font-size: 16px;
+}
+
+.tabs {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding: 15px;
+}
+
+button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.tab {
+    background: #333;
+    color: white;
+}
+
+.tab.active {
+    background: #008cff;
+}
+
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 15px;
+    padding: 15px;
+}
+
+.card {
+    background: #222;
+    padding: 10px;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.card img,
+.card video {
+    width: 100%;
+    max-height: 300px;
+    object-fit: contain;
+    background: black;
+    border-radius: 8px;
+}
+
+.name {
+    font-size: 13px;
+    margin: 8px 0;
+    word-break: break-all;
+}
+
+.download {
+    display: block;
+    text-align: center;
+    background: #00a86b;
+    color: white;
+    text-decoration: none;
+    padding: 9px;
+    border-radius: 7px;
+    margin-top: 8px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>📸 My Gallery</h1>
+
+    <input
+        type="search"
+        id="search"
+        placeholder="🔍 Search photos or videos..."
+    >
+</header>
+
+<div class="tabs">
+    <button class="tab active" onclick="showType('all', this)">All</button>
+    <button class="tab" onclick="showType('photo', this)">📷 Photos</button>
+    <button class="tab" onclick="showType('video', this)">🎬 Videos</button>
+</div>
+
+<div id="gallery" class="gallery"></div>
+
+<script>
+
+let files = [];
+let currentType = "all";
+
+const imageExt = [
+    ".jpg", ".jpeg", ".png", ".gif", ".webp"
+];
+
+const videoExt = [
+    ".mp4", ".webm", ".mov", ".m4v"
+];
+
+function getType(file) {
+    let name = file.toLowerCase();
+
+    if (imageExt.some(ext => name.endsWith(ext))) {
+        return "photo";
+    }
+
+    if (videoExt.some(ext => name.endsWith(ext))) {
+        return "video";
+    }
+
+    return null;
+}
+
+async function loadFiles() {
+
+    try {
+
+        const response = await fetch("/media/");
+
+        const text = await response.text();
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, "text/html");
+
+        files = [];
+
+        doc.querySelectorAll("a").forEach(a => {
+
+            let href = a.getAttribute("href");
+
+            if (!href || href === "../") return;
+
+            let filename = decodeURIComponent(
+                href.split("/").pop()
+            );
+
+            let type = getType(filename);
+
+            if (type) {
+                files.push({
+                    name: filename,
+                    type: type,
+                    url: "/media/" + encodeURIComponent(filename)
+                });
+            }
+        });
+
+        render();
+
+    } catch (error) {
+
+        document.getElementById("gallery").innerHTML =
+            "<p>Files load nahi ho pa rahi hain.</p>";
+
+        console.error(error);
+    }
+}
+
+function render() {
+
+    let search =
+        document.getElementById("search").value.toLowerCase();
+
+    let gallery =
+        document.getElementById("gallery");
+
+    gallery.innerHTML = "";
+
+    let filtered = files.filter(file => {
+
+        let matchesType =
+            currentType === "all" ||
+            file.type === currentType;
+
+        let matchesSearch =
+            file.name.toLowerCase().includes(search);
+
+        return matchesType && matchesSearch;
+    });
+
+    if (filtered.length === 0) {
+        gallery.innerHTML =
+            "<p>No files found.</p>";
+        return;
+    }
+
+    filtered.forEach(file => {
+
+        let card = document.createElement("div");
+        card.className = "card";
+
+        if (file.type === "photo") {
+
+            card.innerHTML = `
+                <img src="${file.url}" loading="lazy">
+
+                <div class="name">
+                    ${escapeHTML(file.name)}
+                </div>
+
+                <a
+                    class="download"
+                    href="${file.url}"
+                    download="${escapeHTML(file.name)}"
+                >
+                    ⬇ Download Photo
+                </a>
+            `;
+
+        } else {
+
+            card.innerHTML = `
+                <video
+                    src="${file.url}"
+                    controls
+                    preload="metadata"
+                ></video>
+
+                <div class="name">
+                    ${escapeHTML(file.name)}
+                </div>
+
+                <a
+                    class="download"
+                    href="${file.url}"
+                    download="${escapeHTML(file.name)}"
+                >
+                    ⬇ Download Video
+                </a>
+            `;
+        }
+
+        gallery.appendChild(card);
+    });
+}
+
+function showType(type, button) {
+
+    currentType = type;
+
+    document.querySelectorAll(".tab")
+        .forEach(btn => btn.classList.remove("active"));
+
+    button.classList.add("active");
+
+    render();
+}
+
+document
+    .getElementById("search")
+    .addEventListener("input", render);
+
+function escapeHTML(str) {
+
+    return str
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+loadFiles();
+
+</script>
+
+</body>
+</html>
